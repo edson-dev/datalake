@@ -17,6 +17,7 @@
 namespace duckdb {
 class ClientContext;
 class DatalakeCatalog;
+struct CreateViewInfo;
 struct DatalakeObject;
 
 //! A schema of a datalake catalog - it holds the entries generated from the objects of the catalog folder
@@ -53,6 +54,8 @@ private:
 	void CreateMissingEntries(ClientContext &context, bool ignore_errors);
 	//! Create the entry for a single object
 	unique_ptr<CatalogEntry> CreateEntry(ClientContext &context, const DatalakeObject &object);
+	//! Copy the object of a view of another datalake catalog and recreate the view on the copy
+	optional_ptr<CatalogEntry> CopyViewFromOtherCatalog(ClientContext &context, CreateViewInfo &info);
 	//! Invoke the callback for every entry of the given type
 	void ScanInternal(CatalogType type, const std::function<void(CatalogEntry &)> &callback);
 	//! Whether an entry of the given type can be looked up in this schema

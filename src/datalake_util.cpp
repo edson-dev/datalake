@@ -188,4 +188,102 @@ void DatalakeUtil::GetColumns(ClientContext &context, const string &reader, cons
 	BindReader(context, reader, full_path, function, bind_data, types, names);
 }
 
+string DatalakeUtil::NormalizePathSeparators(const string &path) {
+	string result = path;
+	for (idx_t i = 0; i < result.size(); i++) {
+		if (result[i] == '\\') {
+			result[i] = '/';
+		}
+	}
+	return result;
+}
+
+string DatalakeUtil::RelativeToRoot(const string &root, const string &path) {
+	auto normalized_root = NormalizePathSeparators(root);
+	auto normalized_path = NormalizePathSeparators(path);
+	if (normalized_root.empty() || normalized_path.size() <= normalized_root.size()) {
+		return string();
+	}
+	if (normalized_path.compare(0, normalized_root.size(), normalized_root) != 0) {
+		return string();
+	}
+	if (normalized_path[normalized_root.size()] != '/') {
+		return string();
+	}
+	return normalized_path.substr(normalized_root.size() + 1);
+}
+
+static const string VIEW_MARKER = " AS SELECT * FROM ";
+
+bool DatalakeUtil::ParseViewDefinition(const string &sql, string &reader, string &full_path) {
+	auto marker = sql.find(VIEW_MARKER);
+	if (marker == string::npos) {
+		return false;
+	}
+	auto rest = sql.substr(marker + VIEW_MARKER.size());
+	auto open = rest.find('(');
+	if (open == string::npos || open == 0) {
+		return false;
+	}
+	reader = rest.substr(0, open);
+	if (open + 1 >= rest.size() || rest[open + 1] != '\'') {
+		return false;
+	}
+	// the object path is the single quoted literal of the reader call
+	auto close = rest.find_last_of('\'');
+	if (close <= open + 1) {
+		return false;
+	}
+	full_path.clear();
+	for (idx_t i = open + 2; i < close; i++) {
+		if (rest[i] == '\'' && i + 1 < close && rest[i + 1] == '\'') {
+			full_path += '\'';
+			i++;
+		} else {
+			full_path += rest[i];
+		}
+	}
+	return !full_path.empty();
+}
+
+void DatalakeUtil::CopyFileRaw(FileSystem &fs, const string &source, const string &target) {
+	if (NormalizePathSeparators(source) == NormalizePathSeparators(target)) {
+		return;
+	}
+	// object stores do not have folders, local targets need the folder of the object
+	if (target.find("://") == string::npos) {
+		auto separator = target.find_last_of("/\\");
+		if (separator != string::npos && separator > 0) {
+			auto parent = target.substr(0, separator);
+			if (!fs.DirectoryExists(parent)) {
+				fs.CreateDirectoriesRecursive(parent);
+			}
+		}
+	}
+	// an existing object of the target catalog is replaced by the copy
+	if (fs.FileExists(target)) {
+		fs.RemoveFile(target);
+	}
+
+	auto source_handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
+	auto target_handle = fs.OpenFile(target, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	vector<char> buffer(1 << 20);
+	while (true) {
+		auto bytes_read = source_handle->Read(buffer.data(), buffer.size());
+		if (bytes_read <= 0) {
+			break;
+		}
+		auto remaining = static_cast<idx_t>(bytes_read);
+		idx_t written = 0;
+		while (written < remaining) {
+			auto bytes_written = target_handle->Write(buffer.data() + written, remaining - written);
+			if (bytes_written <= 0) {
+				throw IOException("Could not write the datalake copy of \"%s\"", target);
+			}
+			written += static_cast<idx_t>(bytes_written);
+		}
+	}
+	target_handle->Sync();
+}
+
 } // namespace duckdb

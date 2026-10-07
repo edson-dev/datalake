@@ -29,9 +29,49 @@ DatalakeCatalog::DatalakeCatalog(AttachedDatabase &db, string attach_path)
 			root_path = root_path.substr(0, separator_pos);
 		}
 	}
+	lock_guard<mutex> guard(InstanceMutex());
+	Instances().push_back(this);
 }
 
 DatalakeCatalog::~DatalakeCatalog() {
+	lock_guard<mutex> guard(InstanceMutex());
+	auto &instances = Instances();
+	for (auto entry = instances.begin(); entry != instances.end(); ++entry) {
+		if (*entry == this) {
+			instances.erase(entry);
+			break;
+		}
+	}
+}
+
+mutex &DatalakeCatalog::InstanceMutex() {
+	static mutex instance_mutex;
+	return instance_mutex;
+}
+
+vector<DatalakeCatalog *> &DatalakeCatalog::Instances() {
+	static vector<DatalakeCatalog *> instances;
+	return instances;
+}
+
+string DatalakeCatalog::FindSourceRoot(const string &path, const DatalakeCatalog &exclude) {
+	auto normalized_path = DatalakeUtil::NormalizePathSeparators(path);
+	string best_match;
+	lock_guard<mutex> guard(InstanceMutex());
+	for (auto &instance : Instances()) {
+		if (instance == &exclude) {
+			continue;
+		}
+		auto candidate = DatalakeUtil::NormalizePathSeparators(instance->GetRootPath());
+		if (candidate.empty() || candidate.size() >= normalized_path.size() || candidate.size() <= best_match.size()) {
+			continue;
+		}
+		if (normalized_path.compare(0, candidate.size(), candidate) != 0 || normalized_path[candidate.size()] != '/') {
+			continue;
+		}
+		best_match = candidate;
+	}
+	return best_match;
 }
 
 void DatalakeCatalog::Initialize(bool load_builtin) {
@@ -150,8 +190,22 @@ optional_ptr<SchemaCatalogEntry> DatalakeCatalog::LookupSchema(CatalogTransactio
 }
 
 optional_ptr<CatalogEntry> DatalakeCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
-	throw CatalogException("Cannot create schema \"%s\" in datalake catalog \"%s\" - the catalog is read-only",
-	                       info.schema, GetName());
+	// COPY ... FROM DATABASE creates the schema of every object before the objects themselves are copied,
+	// IF NOT EXISTS means the schema is allowed to be there already - a folder does not have to exist yet
+	if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+		throw CatalogException("Cannot create schema \"%s\" in datalake catalog \"%s\" - the catalog is read-only",
+		                       info.schema, GetName());
+	}
+	if (transaction.HasContext()) {
+		Refresh(transaction.GetContext());
+	}
+	lock_guard<mutex> guard(catalog_lock);
+	auto entry = schemas.find(info.schema);
+	if (entry == schemas.end()) {
+		schemas[info.schema] = CreateSchemaEntry(info.schema);
+		entry = schemas.find(info.schema);
+	}
+	return entry->second.get();
 }
 
 void DatalakeCatalog::DropSchema(ClientContext &context, DropInfo &info) {

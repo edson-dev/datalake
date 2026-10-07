@@ -57,6 +57,14 @@ public:
 	//! Columns returned by a reader function on a path
 	static void GetColumns(ClientContext &context, const string &reader, const string &full_path,
 	                       vector<LogicalType> &types, vector<string> &names);
+	//! Copy a file byte for byte so the target catalog gets its own physical objects
+	static void CopyFileRaw(FileSystem &fs, const string &source, const string &target);
+	//! Replace every path separator with '/' so paths of different catalogs can be compared
+	static string NormalizePathSeparators(const string &path);
+	//! Path of `path` relative to `root`, empty when `path` is not located below `root`
+	static string RelativeToRoot(const string &root, const string &path);
+	//! Split the definition of a datalake generated view into reader function and object path
+	static bool ParseViewDefinition(const string &sql, string &reader, string &full_path);
 };
 
 } // namespace duckdb

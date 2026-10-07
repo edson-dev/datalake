@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -135,8 +136,50 @@ optional_ptr<CatalogEntry> DatalakeSchemaEntry::CreateTable(CatalogTransaction t
 }
 
 optional_ptr<CatalogEntry> DatalakeSchemaEntry::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
+	if (transaction.HasContext()) {
+		// COPY ... FROM DATABASE hands over the view definitions of the source catalog
+		auto copied = CopyViewFromOtherCatalog(transaction.GetContext(), info);
+		if (copied) {
+			return copied;
+		}
+	}
 	ThrowReadOnly(name, "create a view");
 	return nullptr;
+}
+
+optional_ptr<CatalogEntry> DatalakeSchemaEntry::CopyViewFromOtherCatalog(ClientContext &context, CreateViewInfo &info) {
+	if (info.view_name.empty()) {
+		return nullptr;
+	}
+	string reader;
+	string source_path;
+	if (!DatalakeUtil::ParseViewDefinition(info.sql, reader, source_path)) {
+		return nullptr;
+	}
+	// only a view that reads an object of another attached datalake catalog is copied
+	auto source_root = DatalakeCatalog::FindSourceRoot(source_path, datalake_catalog);
+	if (source_root.empty()) {
+		return nullptr;
+	}
+	auto relative_path = DatalakeUtil::RelativeToRoot(source_root, source_path);
+	if (relative_path.empty()) {
+		return nullptr;
+	}
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto target_path = DatalakeUtil::JoinRootPath(fs, datalake_catalog.GetRootPath(), relative_path);
+	DatalakeUtil::CopyFileRaw(fs, source_path, target_path);
+
+	// the view of the target catalog reads its own copy of the object
+	auto select = DatalakeUtil::BuildSelectStatement(reader, target_path);
+	auto qualified_name = KeywordHelper::WriteQuoted(name, '"') + "." + KeywordHelper::WriteQuoted(info.view_name, '"');
+	CreateViewInfo view_info(*this, info.view_name);
+	view_info.sql = "CREATE VIEW " + qualified_name + " AS " + select;
+	view_info.query = CreateViewInfo::ParseSelect(select);
+	auto entry = make_uniq<ViewCatalogEntry>(catalog, *this, view_info);
+	auto result = entry.get();
+	lock_guard<mutex> guard(entry_lock);
+	entries[info.view_name] = std::move(entry);
+	return result;
 }
 
 optional_ptr<CatalogEntry> DatalakeSchemaEntry::CreateSequence(CatalogTransaction transaction,

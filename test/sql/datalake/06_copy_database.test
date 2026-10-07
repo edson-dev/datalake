@@ -1,0 +1,142 @@
+# name: test/sql/datalake/06_copy_database.test
+# description: COPY ... FROM DATABASE copies the objects behind datalake views into the target catalog
+# group: [datalake]
+
+require datalake
+
+require parquet
+
+# a COPY of an empty result set only creates the target directory
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_src' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_src/bucket' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_src/bucket/cities' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_src/reports' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS id, 'alpha' AS name UNION ALL SELECT 2, 'beta') TO '__TEST_DIR__/cd_src/bucket/cities/a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 10 AS id, 'gamma' AS name) TO '__TEST_DIR__/cd_src/bucket/cities/b.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 7 AS total) TO '__TEST_DIR__/cd_src/reports/summary.parquet' (FORMAT PARQUET)
+
+# the target catalog already owns a folder of the same name with a stale object in it
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_dst' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_dst/bucket' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/cd_dst/bucket/cities' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 999 AS id, 'stale' AS name) TO '__TEST_DIR__/cd_dst/bucket/cities/a.parquet' (FORMAT PARQUET)
+
+statement ok
+ATTACH '__TEST_DIR__/cd_src' AS cdsrc (TYPE datalake)
+
+statement ok
+ATTACH '__TEST_DIR__/cd_dst' AS cddst (TYPE datalake)
+
+query I
+SELECT count(*) FROM cddst.bucket."cities_a.parquet"
+----
+1
+
+statement ok
+COPY FROM DATABASE cdsrc TO cddst
+
+# the target catalog keeps the folder structure and the file names of the source catalog
+
+query I
+SELECT schema_name FROM duckdb_schemas() WHERE database_name='cddst' ORDER BY 1
+----
+bucket
+main
+reports
+
+query I
+SELECT view_name FROM duckdb_views() WHERE database_name='cddst' ORDER BY 1
+----
+cities_a.parquet
+cities_b.parquet
+summary.parquet
+
+# every view of the target catalog reads its own copy, never the object of the source catalog
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE database_name='cddst' AND sql LIKE '%cd_src%'
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE database_name='cddst' AND sql LIKE '%cd_dst%'
+----
+3
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE database_name='cdsrc' AND sql LIKE '%cd_src%'
+----
+3
+
+# the stale object of the target folder is overridden by the copy
+
+query T
+SELECT id || '|' || name FROM cddst.bucket."cities_a.parquet" ORDER BY id
+----
+1|alpha
+2|beta
+
+query T
+SELECT id || '|' || name FROM cddst.bucket."cities_b.parquet"
+----
+10|gamma
+
+query I
+SELECT total FROM cddst.reports."summary.parquet"
+----
+7
+
+# the source catalog is untouched
+
+query T
+SELECT id || '|' || name FROM cdsrc.bucket."cities_a.parquet" ORDER BY id
+----
+1|alpha
+2|beta
+
+# a second copy with an explicit list of objects overrides the folder again
+
+statement ok
+COPY (SELECT 3 AS id, 'delta' AS name) TO '__TEST_DIR__/cd_src/bucket/cities/a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY FROM DATABASE cdsrc TO cddst (SCHEMA)
+
+query T
+SELECT id || '|' || name FROM cddst.bucket."cities_a.parquet" ORDER BY id
+----
+3|delta
+
+# regular writes on a datalake catalog stay read-only
+
+statement error
+CREATE VIEW cddst.v AS SELECT 1
+----
+read-only
+
+statement error
+CREATE SCHEMA cddst.new_schema
+----
+read-only

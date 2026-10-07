@@ -55,6 +55,8 @@ public:
 	const string &GetRootPath() const {
 		return root_path;
 	}
+	//! Normalized root of the other attached datalake catalog that owns `path`, empty when there is none
+	static string FindSourceRoot(const string &path, const DatalakeCatalog &exclude);
 	//! List the folder and update the schemas of this catalog
 	void Refresh(ClientContext &context);
 	//! All objects of a single schema
@@ -64,6 +66,10 @@ private:
 	void DropSchema(ClientContext &context, DropInfo &info) override;
 	//! Create the schema entry for a schema that does not exist yet
 	unique_ptr<DatalakeSchemaEntry> CreateSchemaEntry(const string &schema_name);
+	//! Guards the registry of attached datalake catalogs
+	static mutex &InstanceMutex();
+	//! Every datalake catalog that is currently attached
+	static vector<DatalakeCatalog *> &Instances();
 
 private:
 	string root_path;
