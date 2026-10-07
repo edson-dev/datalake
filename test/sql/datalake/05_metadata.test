@@ -1,0 +1,46 @@
+# name: test/sql/datalake/05_metadata.test
+# description: Catalog metadata as reported to SQL clients such as DBeaver
+# group: [datalake]
+
+require datalake
+
+require parquet
+
+# a COPY of an empty result set only creates the target directory
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_meta' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_meta/public' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS id, 'alice' AS name) TO '__TEST_DIR__/dl_meta/customers.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 1 AS invoice_id, 100.0 AS total) TO '__TEST_DIR__/dl_meta/public/invoices.parquet' (FORMAT PARQUET)
+
+statement ok
+ATTACH '__TEST_DIR__/dl_meta' AS meta (TYPE datalake)
+
+query TT
+SELECT table_name, table_type FROM information_schema.tables WHERE table_catalog='meta' ORDER BY 1
+----
+customers	VIEW
+invoices	VIEW
+
+query TTT
+SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_catalog='meta' ORDER BY table_name, ordinal_position
+----
+customers	id	INTEGER
+customers	name	VARCHAR
+invoices	invoice_id	INTEGER
+invoices	total	DECIMAL(4,1)
+
+query TTT
+SELECT table_name, column_name, data_type FROM duckdb_columns() WHERE database_name='meta' ORDER BY table_name, column_index
+----
+customers	id	INTEGER
+customers	name	VARCHAR
+invoices	invoice_id	INTEGER
+invoices	total	DECIMAL(4,1)

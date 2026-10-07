@@ -1,0 +1,73 @@
+# name: test/sql/datalake/03_readonly.test
+# description: datalake catalogs reject every write operation
+# group: [datalake]
+
+require datalake
+
+require parquet
+
+# a COPY of an empty result set only creates the target directory
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_ro' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS id, 'alice' AS name) TO '__TEST_DIR__/dl_ro/customers.parquet' (FORMAT PARQUET)
+
+statement ok
+ATTACH '__TEST_DIR__/dl_ro' AS ro (TYPE datalake)
+
+statement error
+CREATE TABLE ro.foo(i INT)
+----
+read-only
+
+statement error
+CREATE VIEW ro.v AS SELECT 1
+----
+read-only
+
+statement error
+CREATE SCHEMA ro.new_schema
+----
+read-only
+
+statement error
+DROP TABLE ro.customers
+----
+read-only
+
+statement error
+DROP SCHEMA ro.main
+----
+read-only
+
+statement error
+ALTER TABLE ro.customers RENAME COLUMN name TO full_name
+----
+read-only
+
+statement error
+CREATE TABLE ro.t AS SELECT * FROM ro.customers
+----
+read-only
+
+statement error
+INSERT INTO ro.customers VALUES (3, 'carol')
+----
+not an table
+
+statement error
+DELETE FROM ro.customers
+----
+base table
+
+statement error
+UPDATE ro.customers SET name = 'carol'
+----
+base table
+
+statement error
+DROP VIEW ro.main.customers
+----
+read-only

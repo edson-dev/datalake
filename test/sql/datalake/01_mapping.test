@@ -1,0 +1,131 @@
+# name: test/sql/datalake/01_mapping.test
+# description: Map an object storage folder onto catalog schemas, tables and views
+# group: [datalake]
+
+require datalake
+
+require parquet
+
+require json
+
+# a COPY of an empty result set only creates the target directory
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_map' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_map/public' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_map/brazil' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_map/brazil/companies' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_map/brazil/companies/active' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS id, 'alice' AS name, 'NL' AS country UNION ALL SELECT 2, 'bob', 'BR') TO '__TEST_DIR__/dl_map/customers.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 1 AS id, 10 AS customer_id, 11.5 AS amount UNION ALL SELECT 2, 20, 23.0) TO '__TEST_DIR__/dl_map/orders.csv' (FORMAT CSV, HEADER true)
+
+statement ok
+COPY (SELECT 1 AS id, 'click_1' AS event, TIMESTAMP '2024-01-01 01:00:00' AS ts) TO '__TEST_DIR__/dl_map/events.json' (FORMAT JSON)
+
+statement ok
+COPY (SELECT 1 AS invoice_id, 100.0 AS total) TO '__TEST_DIR__/dl_map/public/invoices.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 'Sao Paulo' AS name, 'SP' AS uf UNION ALL SELECT 'Rio de Janeiro', 'RJ') TO '__TEST_DIR__/dl_map/brazil/cities.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 'note 1' AS note UNION ALL SELECT 'note 2') TO '__TEST_DIR__/dl_map/brazil/notes.csv' (FORMAT CSV, HEADER true)
+
+statement ok
+COPY (SELECT 'company_1' AS company, 'active' AS status UNION ALL SELECT 'company_2', 'active') TO '__TEST_DIR__/dl_map/brazil/companies/active/companies.parquet' (FORMAT PARQUET)
+
+# unsupported extensions are ignored
+
+statement ok
+COPY (SELECT 'ignore me' AS x) TO '__TEST_DIR__/dl_map/README.txt' (FORMAT CSV, HEADER true)
+
+statement ok
+ATTACH '__TEST_DIR__/dl_map' AS dl (TYPE datalake)
+
+query I
+SELECT schema_name FROM duckdb_schemas() WHERE database_name='dl' ORDER BY 1
+----
+brazil
+main
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE database_name='dl' AND schema_name='public'
+----
+0
+
+# root files and public/ files land in the default schema, everything is a view
+
+query I
+SELECT count(*) FROM duckdb_tables() WHERE database_name='dl'
+----
+0
+
+query I
+SELECT view_name FROM duckdb_views() WHERE database_name='dl' ORDER BY 1
+----
+cities
+companies_active_companies
+customers
+events
+invoices
+notes
+orders
+
+# folders are joined with _ to form the view name
+
+query T
+SELECT id || '|' || name || '|' || country FROM dl.customers ORDER BY id
+----
+1|alice|NL
+2|bob|BR
+
+query T
+SELECT id || '|' || customer_id || '|' || amount FROM dl.orders ORDER BY id
+----
+1|10|11.5
+2|20|23.0
+
+query T
+SELECT id || '|' || event || '|' || ts FROM dl.events
+----
+1|click_1|2024-01-01 01:00:00
+
+query T
+SELECT invoice_id || '|' || total FROM dl.invoices
+----
+1|100.0
+
+query T
+SELECT name || '|' || uf FROM dl.brazil.cities ORDER BY 1
+----
+Rio de Janeiro|RJ
+Sao Paulo|SP
+
+query T
+SELECT note FROM dl.brazil.notes ORDER BY 1
+----
+note 1
+note 2
+
+query T
+SELECT company || '|' || status FROM dl.brazil.companies_active_companies ORDER BY 1
+----
+company_1|active
+company_2|active
+
+query I
+SELECT count(*) FROM information_schema.tables WHERE table_catalog='dl'
+----
+7

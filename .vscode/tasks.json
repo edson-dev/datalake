@@ -1,0 +1,74 @@
+{
+	"version": "2.0.0",
+	"windows": {
+		"options": {
+			"cwd": "${workspaceFolder}"
+		}
+	},
+	"tasks": [
+		{
+			"label": "datalake: configure",
+			"type": "process",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$cmake='C:\\Users\\AzK-v\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\cmake.exe'; $ninja='C:\\Users\\AzK-v\\AppData\\Roaming\\Python\\Python314\\Scripts\\ninja.exe'; $p=('${workspaceFolder}' -replace '\\\\','/'); & $cmake -G Ninja -DFORCE_COLORED_OUTPUT=1 \"-DCMAKE_MAKE_PROGRAM=$ninja\" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DEXTENSION_STATIC_BUILD=1 \"-DDUCKDB_EXTENSION_CONFIGS=$p/extension_config.cmake\" \"-DUNITTEST_ROOT_DIRECTORY=$p/\" \"-DBENCHMARK_ROOT_DIRECTORY=$p/\" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DCMAKE_BUILD_TYPE=Release -S \"$p/duckdb\" -B \"$p/build/release\"; exit $LASTEXITCODE"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "datalake: build",
+			"type": "process",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"$cmake='C:\\Users\\AzK-v\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\cmake.exe'; $ninja='C:\\Users\\AzK-v\\AppData\\Roaming\\Python\\Python314\\Scripts\\ninja.exe'; $p=('${workspaceFolder}' -replace '\\\\','/'); if (!(Test-Path \"$p/build/release/CMakeCache.txt\")) { & $cmake -G Ninja -DFORCE_COLORED_OUTPUT=1 \"-DCMAKE_MAKE_PROGRAM=$ninja\" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DEXTENSION_STATIC_BUILD=1 \"-DDUCKDB_EXTENSION_CONFIGS=$p/extension_config.cmake\" \"-DUNITTEST_ROOT_DIRECTORY=$p/\" \"-DBENCHMARK_ROOT_DIRECTORY=$p/\" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DCMAKE_BUILD_TYPE=Release -S \"$p/duckdb\" -B \"$p/build/release\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }; & $cmake --build \"$p/build/release\" --config Release -j 24; exit $LASTEXITCODE"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"runOptions": {
+				"runOn": "folderOpen"
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared",
+				"clear": true
+			}
+		},
+		{
+			"label": "datalake: test",
+			"type": "process",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"& '${workspaceFolder}\\build\\release\\test\\unittest.exe' 'test/sql/datalake/*'; exit $LASTEXITCODE"
+			],
+			"problemMatcher": [],
+			"group": { "kind": "test" },
+			"dependsOn": "datalake: build"
+		},
+		{
+			"label": "datalake: run duckdb",
+			"type": "process",
+			"command": "${workspaceFolder}\\build\\release\\duckdb.exe",
+			"args": [],
+			"problemMatcher": [],
+			"dependsOn": "datalake: build"
+		}
+	]
+}

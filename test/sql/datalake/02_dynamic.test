@@ -1,0 +1,56 @@
+# name: test/sql/datalake/02_dynamic.test
+# description: Files that appear after ATTACH are discovered without re-attaching
+# group: [datalake]
+
+require datalake
+
+require parquet
+
+# a COPY of an empty result set only creates the target directory
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_dyn' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 1 AS seed_id, 'seed_1' AS label) TO '__TEST_DIR__/dl_dyn/seed.parquet' (FORMAT PARQUET)
+
+statement ok
+ATTACH '__TEST_DIR__/dl_dyn' AS dyn (TYPE datalake)
+
+query I
+SELECT view_name FROM duckdb_views() WHERE database_name='dyn' ORDER BY 1
+----
+seed
+
+statement ok
+COPY (SELECT 42 AS added_col) TO '__TEST_DIR__/dl_dyn/added.parquet' (FORMAT PARQUET)
+
+query I
+SELECT view_name FROM duckdb_views() WHERE database_name='dyn' ORDER BY 1
+----
+added
+seed
+
+query T
+SELECT added_col || '' FROM dyn.added
+----
+42
+
+# a folder created after ATTACH shows up as a schema holding a view
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_dyn/newdir' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement ok
+COPY (SELECT 'fresh' AS value) TO '__TEST_DIR__/dl_dyn/newdir/fresh.parquet' (FORMAT PARQUET)
+
+query I
+SELECT schema_name FROM duckdb_schemas() WHERE database_name='dyn' ORDER BY 1
+----
+main
+newdir
+
+query T
+SELECT value FROM dyn.newdir.fresh
+----
+fresh

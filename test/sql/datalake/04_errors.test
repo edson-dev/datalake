@@ -1,0 +1,45 @@
+# name: test/sql/datalake/04_errors.test
+# description: Attachment and lookup failures produce useful errors
+# group: [datalake]
+
+require datalake
+
+require parquet
+
+# a COPY of an empty result set only creates the target directory
+
+statement ok
+COPY (SELECT 1 AS k, 2 AS v WHERE false) TO '__TEST_DIR__/dl_err' (FORMAT PARQUET, PARTITION_BY (k))
+
+statement error
+ATTACH '__TEST_DIR__/dl_err' AS bad (TYPE datalake, foo '1')
+----
+Unrecognized option
+
+statement error
+ATTACH '__TEST_DIR__/dl_err_missing' AS bad2 (TYPE datalake)
+----
+does not exist
+
+statement ok
+ATTACH '__TEST_DIR__/dl_err' AS err (TYPE datalake)
+
+statement error
+SELECT * FROM err.nosuch
+----
+does not exist
+
+statement error
+SELECT * FROM err.missing_schema.anything
+----
+does not exist
+
+# unsupported extensions never show up as entries
+
+statement ok
+COPY (SELECT 'ignore me' AS x) TO '__TEST_DIR__/dl_err/LICENSE' (FORMAT CSV, HEADER true)
+
+query I
+SELECT count(*) FROM information_schema.tables WHERE table_catalog='err'
+----
+0
