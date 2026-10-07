@@ -33,7 +33,7 @@ CREATE SCHEMA ro.new_schema
 read-only
 
 statement error
-DROP TABLE ro.customers
+DROP TABLE ro."customers.parquet"
 ----
 read-only
 
@@ -43,31 +43,31 @@ DROP SCHEMA ro.main
 read-only
 
 statement error
-ALTER TABLE ro.customers RENAME COLUMN name TO full_name
+ALTER TABLE ro."customers.parquet" RENAME COLUMN name TO full_name
 ----
 read-only
 
 statement error
-CREATE TABLE ro.t AS SELECT * FROM ro.customers
+CREATE TABLE ro.t AS SELECT * FROM ro."customers.parquet"
 ----
 read-only
 
 statement error
-INSERT INTO ro.customers VALUES (3, 'carol')
+INSERT INTO ro."customers.parquet" VALUES (3, 'carol')
 ----
 not an table
 
 statement error
-DELETE FROM ro.customers
+DELETE FROM ro."customers.parquet"
 ----
 base table
 
 statement error
-UPDATE ro.customers SET name = 'carol'
+UPDATE ro."customers.parquet" SET name = 'carol'
 ----
 base table
 
 statement error
-DROP VIEW ro.main.customers
+DROP VIEW ro.main."customers.parquet"
 ----
 read-only

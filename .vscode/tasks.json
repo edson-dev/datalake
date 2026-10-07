@@ -29,7 +29,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-Command",
-				"$cmake='C:\\Users\\AzK-v\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\cmake.exe'; $ninja='C:\\Users\\AzK-v\\AppData\\Roaming\\Python\\Python314\\Scripts\\ninja.exe'; $p=('${workspaceFolder}' -replace '\\\\','/'); if (!(Test-Path \"$p/build/release/CMakeCache.txt\")) { & $cmake -G Ninja -DFORCE_COLORED_OUTPUT=1 \"-DCMAKE_MAKE_PROGRAM=$ninja\" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DEXTENSION_STATIC_BUILD=1 \"-DDUCKDB_EXTENSION_CONFIGS=$p/extension_config.cmake\" \"-DUNITTEST_ROOT_DIRECTORY=$p/\" \"-DBENCHMARK_ROOT_DIRECTORY=$p/\" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DCMAKE_BUILD_TYPE=Release -S \"$p/duckdb\" -B \"$p/build/release\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }; & $cmake --build \"$p/build/release\" --config Release -j 24; exit $LASTEXITCODE"
+				"$cmake='C:\\Users\\AzK-v\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\cmake.exe'; $ninja='C:\\Users\\AzK-v\\AppData\\Roaming\\Python\\Python314\\Scripts\\ninja.exe'; $p=('${workspaceFolder}' -replace '\\\\','/'); if (!(Test-Path \"$p/build/release/CMakeCache.txt\")) { & $cmake -G Ninja -DFORCE_COLORED_OUTPUT=1 \"-DCMAKE_MAKE_PROGRAM=$ninja\" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DEXTENSION_STATIC_BUILD=1 \"-DDUCKDB_EXTENSION_CONFIGS=$p/extension_config.cmake\" \"-DUNITTEST_ROOT_DIRECTORY=$p/\" \"-DBENCHMARK_ROOT_DIRECTORY=$p/\" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DCMAKE_BUILD_TYPE=Release -S \"$p/duckdb\" -B \"$p/build/release\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }; & $cmake --build \"$p/build/release\" --config Release -j 24; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & cmd /c \"$p/scripts/package-extensions.cmd\"; exit $LASTEXITCODE"
 			],
 			"problemMatcher": [
 				"$gcc"
@@ -61,6 +61,14 @@
 			"problemMatcher": [],
 			"group": { "kind": "test" },
 			"dependsOn": "datalake: build"
+		},
+		{
+			"label": "datalake: package",
+			"type": "process",
+			"command": "cmd.exe",
+			"args": ["/c", "${workspaceFolder}\\scripts\\package-extensions.cmd"],
+			"problemMatcher": [],
+			"group": "build"
 		},
 		{
 			"label": "datalake: run duckdb",

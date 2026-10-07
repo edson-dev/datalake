@@ -75,52 +75,52 @@ SELECT count(*) FROM duckdb_tables() WHERE database_name='dl'
 query I
 SELECT view_name FROM duckdb_views() WHERE database_name='dl' ORDER BY 1
 ----
-cities
-companies_active_companies
-customers
-events
-invoices
-notes
-orders
+cities.parquet
+companies_active_companies.parquet
+customers.parquet
+events.json
+invoices.parquet
+notes.csv
+orders.csv
 
-# folders are joined with _ to form the view name
+# the file extension stays in the name, so identifiers need to be quoted
 
 query T
-SELECT id || '|' || name || '|' || country FROM dl.customers ORDER BY id
+SELECT id || '|' || name || '|' || country FROM dl."customers.parquet" ORDER BY id
 ----
 1|alice|NL
 2|bob|BR
 
 query T
-SELECT id || '|' || customer_id || '|' || amount FROM dl.orders ORDER BY id
+SELECT id || '|' || customer_id || '|' || amount FROM dl."orders.csv" ORDER BY id
 ----
 1|10|11.5
 2|20|23.0
 
 query T
-SELECT id || '|' || event || '|' || ts FROM dl.events
+SELECT id || '|' || event || '|' || ts FROM dl."events.json"
 ----
 1|click_1|2024-01-01 01:00:00
 
 query T
-SELECT invoice_id || '|' || total FROM dl.invoices
+SELECT invoice_id || '|' || total FROM dl."invoices.parquet"
 ----
 1|100.0
 
 query T
-SELECT name || '|' || uf FROM dl.brazil.cities ORDER BY 1
+SELECT name || '|' || uf FROM dl.brazil."cities.parquet" ORDER BY 1
 ----
 Rio de Janeiro|RJ
 Sao Paulo|SP
 
 query T
-SELECT note FROM dl.brazil.notes ORDER BY 1
+SELECT note FROM dl.brazil."notes.csv" ORDER BY 1
 ----
 note 1
 note 2
 
 query T
-SELECT company || '|' || status FROM dl.brazil.companies_active_companies ORDER BY 1
+SELECT company || '|' || status FROM dl.brazil."companies_active_companies.parquet" ORDER BY 1
 ----
 company_1|active
 company_2|active

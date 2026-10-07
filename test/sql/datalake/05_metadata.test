@@ -26,21 +26,21 @@ ATTACH '__TEST_DIR__/dl_meta' AS meta (TYPE datalake)
 query TT
 SELECT table_name, table_type FROM information_schema.tables WHERE table_catalog='meta' ORDER BY 1
 ----
-customers	VIEW
-invoices	VIEW
+customers.parquet	VIEW
+invoices.parquet	VIEW
 
 query TTT
 SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_catalog='meta' ORDER BY table_name, ordinal_position
 ----
-customers	id	INTEGER
-customers	name	VARCHAR
-invoices	invoice_id	INTEGER
-invoices	total	DECIMAL(4,1)
+customers.parquet	id	INTEGER
+customers.parquet	name	VARCHAR
+invoices.parquet	invoice_id	INTEGER
+invoices.parquet	total	DECIMAL(4,1)
 
 query TTT
 SELECT table_name, column_name, data_type FROM duckdb_columns() WHERE database_name='meta' ORDER BY table_name, column_index
 ----
-customers	id	INTEGER
-customers	name	VARCHAR
-invoices	invoice_id	INTEGER
-invoices	total	DECIMAL(4,1)
+customers.parquet	id	INTEGER
+customers.parquet	name	VARCHAR
+invoices.parquet	invoice_id	INTEGER
+invoices.parquet	total	DECIMAL(4,1)

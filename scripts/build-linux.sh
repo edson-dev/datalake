@@ -30,5 +30,9 @@ cmake -G Ninja \
 
 cmake --build "$BUILD_DIR" -j "$JOBS"
 
+mkdir -p "$ROOT/release/linux_amd64"
+cp -f "$BUILD_DIR/extension/datalake/datalake.duckdb_extension" "$ROOT/release/linux_amd64/datalake.duckdb_extension"
+
 echo
 echo "Built: $BUILD_DIR/extension/datalake/datalake.duckdb_extension"
+echo "Packaged: $ROOT/release/linux_amd64/datalake.duckdb_extension"

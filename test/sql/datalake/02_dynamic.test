@@ -20,7 +20,7 @@ ATTACH '__TEST_DIR__/dl_dyn' AS dyn (TYPE datalake)
 query I
 SELECT view_name FROM duckdb_views() WHERE database_name='dyn' ORDER BY 1
 ----
-seed
+seed.parquet
 
 statement ok
 COPY (SELECT 42 AS added_col) TO '__TEST_DIR__/dl_dyn/added.parquet' (FORMAT PARQUET)
@@ -28,11 +28,11 @@ COPY (SELECT 42 AS added_col) TO '__TEST_DIR__/dl_dyn/added.parquet' (FORMAT PAR
 query I
 SELECT view_name FROM duckdb_views() WHERE database_name='dyn' ORDER BY 1
 ----
-added
-seed
+added.parquet
+seed.parquet
 
 query T
-SELECT added_col || '' FROM dyn.added
+SELECT added_col || '' FROM dyn."added.parquet"
 ----
 42
 
@@ -51,6 +51,6 @@ main
 newdir
 
 query T
-SELECT value FROM dyn.newdir.fresh
+SELECT value FROM dyn.newdir."fresh.parquet"
 ----
 fresh

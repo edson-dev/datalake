@@ -20,12 +20,14 @@ if "%VSROOT%"=="" (
 )
 call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
 
-"%DATALAKE_CMAKE%" -G Ninja "-DCMAKE_MAKE_PROGRAM=%DATALAKE_NINJA%" -DCMAKE_BUILD_TYPE=Release -DEXTENSION_STATIC_BUILD=1 -DBUILD_UNITTESTS=FALSE "-DDUCKDB_EXTENSION_CONFIGS=%FWD%/extension_config.cmake" "-DUNITTEST_ROOT_DIRECTORY=%FWD%/" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -S "%FWD%/duckdb" -B "%FWD%/build/msvc"
-if errorlevel 1 exit /b 1
+"%DATALAKE_CMAKE%" -G Ninja "-DCMAKE_MAKE_PROGRAM=%DATALAKE_NINJA%" -DCMAKE_BUILD_TYPE=Release -DEXTENSION_STATIC_BUILD=1 -DBUILD_UNITTESTS=FALSE "-DDUCKDB_EXTENSION_CONFIGS=%FWD%/extension_config.cmake" "-DUNITTEST_ROOT_DIRECTORY=%FWD%/" -DENABLE_UNITTEST_CPP_TESTS=FALSE -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -S "%FWD%/duckdb" -B "%FWD%/build/msvc" || exit /b 1
 
-"%DATALAKE_CMAKE%" --build "%FWD%/build/msvc" --config Release -j 24
-if errorlevel 1 exit /b 1
+"%DATALAKE_CMAKE%" --build "%FWD%/build/msvc" --config Release -j 24 || exit /b 1
+
+if not exist "%ROOT%\release\windows_amd64" mkdir "%ROOT%\release\windows_amd64"
+copy /y "%ROOT%\build\msvc\extension\datalake\datalake.duckdb_extension" "%ROOT%\release\windows_amd64\datalake.duckdb_extension" >nul || exit /b 1
 
 echo.
 echo Built: %FWD%\build\msvc\extension\datalake\datalake.duckdb_extension
+echo Packaged: %FWD%\release\windows_amd64\datalake.duckdb_extension
 exit /b 0

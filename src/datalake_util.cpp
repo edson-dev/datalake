@@ -96,7 +96,8 @@ vector<DatalakeObject> DatalakeUtil::MapObjects(FileSystem &fs, const string &ro
 		object.entry_type = CatalogType::VIEW_ENTRY;
 		object.reader = reader;
 		object.full_path = JoinRootPath(fs, root, relative_path);
-		object.name = base_name.substr(0, last_dot);
+		// keep the file extension so it is always obvious which file backs the entry
+		object.name = base_name;
 		if (components.size() == 1) {
 			object.schema = DEFAULT_SCHEMA_NAME;
 		} else {
