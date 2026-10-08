@@ -250,6 +250,8 @@ void DatalakeUtil::CopyFileRaw(FileSystem &fs, const string &source, const strin
 	if (NormalizePathSeparators(source) == NormalizePathSeparators(target)) {
 		return;
 	}
+	// the source is opened before the target is touched, an unreadable object must never destroy an existing object
+	auto source_handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
 	// object stores do not have folders, local targets need the folder of the object
 	if (target.find("://") == string::npos) {
 		auto separator = target.find_last_of("/\\");
@@ -264,26 +266,37 @@ void DatalakeUtil::CopyFileRaw(FileSystem &fs, const string &source, const strin
 	if (fs.FileExists(target)) {
 		fs.RemoveFile(target);
 	}
-
-	auto source_handle = fs.OpenFile(source, FileFlags::FILE_FLAGS_READ);
 	auto target_handle = fs.OpenFile(target, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	vector<char> buffer(1 << 20);
-	while (true) {
-		auto bytes_read = source_handle->Read(buffer.data(), buffer.size());
-		if (bytes_read <= 0) {
-			break;
-		}
-		auto remaining = static_cast<idx_t>(bytes_read);
-		idx_t written = 0;
-		while (written < remaining) {
-			auto bytes_written = target_handle->Write(buffer.data() + written, remaining - written);
-			if (bytes_written <= 0) {
-				throw IOException("Could not write the datalake copy of \"%s\"", target);
+	try {
+		vector<char> buffer(1 << 20);
+		while (true) {
+			auto bytes_read = source_handle->Read(buffer.data(), buffer.size());
+			if (bytes_read <= 0) {
+				break;
 			}
-			written += static_cast<idx_t>(bytes_written);
+			auto remaining = static_cast<idx_t>(bytes_read);
+			idx_t written = 0;
+			while (written < remaining) {
+				auto bytes_written = target_handle->Write(buffer.data() + written, remaining - written);
+				if (bytes_written <= 0) {
+					throw IOException("Could not write the datalake copy of \"%s\"", target);
+				}
+				written += static_cast<idx_t>(bytes_written);
+			}
 		}
+		target_handle->Sync();
+	} catch (...) {
+		// a half written object is never left behind, the catalog must not expose it
+		target_handle.reset();
+		source_handle.reset();
+		try {
+			if (fs.FileExists(target)) {
+				fs.RemoveFile(target);
+			}
+		} catch (...) {
+		}
+		throw;
 	}
-	target_handle->Sync();
 }
 
 } // namespace duckdb

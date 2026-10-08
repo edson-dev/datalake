@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -167,7 +168,13 @@ optional_ptr<CatalogEntry> DatalakeSchemaEntry::CopyViewFromOtherCatalog(ClientC
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto target_path = DatalakeUtil::JoinRootPath(fs, datalake_catalog.GetRootPath(), relative_path);
-	DatalakeUtil::CopyFileRaw(fs, source_path, target_path);
+	try {
+		DatalakeUtil::CopyFileRaw(fs, source_path, target_path);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		error.Throw(StringUtil::Format("Could not copy the datalake object \"%s\" to \"%s\": ", source_path,
+		                               target_path));
+	}
 
 	// the view of the target catalog reads its own copy of the object
 	auto select = DatalakeUtil::BuildSelectStatement(reader, target_path);
